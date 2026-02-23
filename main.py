@@ -7,8 +7,8 @@ from flet_geolocator import Geolocator, GeolocatorPosition
 def calculate_distance(lat1, lon1, lat2, lon2):
     R = 6371.0  # Earth's radius in km
     dlat, dlon = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
-    a = (math.sin(dlat / 2) ** 2 +
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2)
+    a = (math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(
+        dlon / 2) ** 2)
     return R * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
 
 
@@ -18,12 +18,13 @@ def main(page: ft.Page):
     path_points = []
     total_dist = 0.0
 
-    distance_text = ft.Text("Distance: 0.00 km", size=20, weight="bold")
+    distance_text = ft.Text(value="Distance: 0.00 km", size=20, weight=ft.FontWeight.BOLD)
 
     def on_position_change(e: GeolocatorPosition):
         nonlocal total_dist
         new_loc = ftm.MapLatitudeLongitude(e.latitude, e.longitude)
 
+        # Calculate distance
         if path_points:
             prev = path_points[-1]
             total_dist += calculate_distance(prev.latitude, prev.longitude, new_loc.latitude, new_loc.longitude)
@@ -33,19 +34,24 @@ def main(page: ft.Page):
 
         # Update markers and path
         marker_layer.markers.append(
-            ftm.Marker(content=ft.Icon(ft.Icons.LOCATION_PIN, color="blue"), coordinates=new_loc))
+            ftm.Marker(content=ft.Icon(ft.Icons.PERSON_PIN, color=ft.Colors.BLUE), coordinates=new_loc))
         if len(path_points) > 1:
             polyline_layer.polylines[0].coordinates = list(path_points)
 
         map_ctrl.center = new_loc
         page.update()
 
-    # Note the change here: 'Geolocator' instead of 'FletGeolocator'
+    # Initialize Geolocator
     gl = Geolocator(on_position_change=on_position_change)
     page.overlay.append(gl)
 
+    # FIX: Create an asynchronous function to handle the button click properly
+    async def start_tracking_click(e):
+        await gl.get_current_position()
+
     marker_layer = ftm.MarkerLayer(markers=[])
-    polyline_layer = ftm.PolylineLayer(polylines=[ftm.PolylineMarker(coordinates=[], color="blue", stroke_width=3)])
+    polyline_layer = ftm.PolylineLayer(
+        polylines=[ftm.PolylineMarker(coordinates=[], color=ft.Colors.BLUE, stroke_width=3)])
 
     map_ctrl = ftm.Map(
         expand=True,
@@ -59,10 +65,19 @@ def main(page: ft.Page):
     )
 
     page.add(
-        ft.Row([distance_text, ft.ElevatedButton("Start Live Tracking", on_click=lambda _: gl.get_current_position())],
-               alignment="spaceBetween"),
-        ft.Container(map_ctrl, expand=True)
+        ft.Row(
+            controls=[
+                distance_text,
+                # Use the new async function here, and properly define the text parameter
+                ft.ElevatedButton(text="Start Live Tracking", on_click=start_tracking_click)
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN
+        ),
+        ft.Container(content=map_ctrl, expand=True)
     )
 
 
-ft.app(main)
+if __name__ == "__main__":
+    # If you accidentally run this on desktop, it will open in your web browser instead
+    # to prevent the giant red box from showing up!
+    ft.app(target=main, view=ft.AppView.WEB_BROWSER)
