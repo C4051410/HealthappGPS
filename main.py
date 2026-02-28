@@ -5,7 +5,7 @@ from flet_geolocator import Geolocator
 
 
 def calculate_distance(lat1, lon1, lat2, lon2):
-    R = 6371.0  # Earth's radius in km
+    R = 6371.0
     dlat, dlon = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
     a = (math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(
         dlon / 2) ** 2)
@@ -13,8 +13,7 @@ def calculate_distance(lat1, lon1, lat2, lon2):
 
 
 def main(page: ft.Page):
-    page.title = "Live GPS Tracker"
-    page.padding = 0
+    page.title = "Health App GPS"
     page.theme_mode = ft.ThemeMode.LIGHT
 
     # --- State Variables ---
@@ -22,17 +21,17 @@ def main(page: ft.Page):
     total_dist = 0.0
     is_tracking = False
 
-    # --- UI Elements ---
+    # ==========================================
+    # 1. MAP VIEW COMPONENTS (The Tracking Screen)
+    # ==========================================
     distance_value = ft.Text(value="0.00", size=48, weight=ft.FontWeight.BOLD)
     distance_label = ft.Text(value="KILOMETERS", size=12, color=ft.Colors.GREY_700, weight=ft.FontWeight.BOLD)
 
-    # --- Map Layers ---
     marker_layer = ftm.MarkerLayer(markers=[])
     polyline_layer = ftm.PolylineLayer(
         polylines=[ftm.PolylineMarker(coordinates=[], color=ft.Colors.DEEP_ORANGE, stroke_width=4)]
     )
 
-    # --- Map Definition ---
     map_ctrl = ftm.Map(
         expand=True,
         initial_center=ftm.MapLatitudeLongitude(54.9783, -1.6178),
@@ -44,20 +43,17 @@ def main(page: ft.Page):
         ]
     )
 
-    # --- Tracking Logic ---
+    # Tracking Logic
     def on_position_change(e):
         nonlocal total_dist, is_tracking
-
         new_loc = ftm.MapLatitudeLongitude(e.position.latitude, e.position.longitude)
 
-        # Always update your current location marker and center the map
         marker_layer.markers.clear()
         marker_layer.markers.append(
             ftm.Marker(content=ft.Icon(ft.Icons.MY_LOCATION, color=ft.Colors.BLUE, size=30), coordinates=new_loc)
         )
         map_ctrl.center = new_loc
 
-        # ONLY calculate distance and draw the line IF tracking is active
         if is_tracking:
             if path_points:
                 prev = path_points[-1]
@@ -71,42 +67,30 @@ def main(page: ft.Page):
 
         page.update()
 
-    # Initialize Geolocator
+    # Initialize Geolocator in the background overlay
     gl = Geolocator(on_position_change=on_position_change)
     page.overlay.append(gl)
 
-    # --- Button Handlers ---
+    # Tracking Buttons
     async def start_tracking(e):
         nonlocal is_tracking
-
-        # FIX: Use the correct method names for checking and requesting permissions
         status = await gl.get_permission_status()
-
-        # If the status contains "denied" (handling both string or Enum returns), ask for it!
         if "denied" in str(status).lower():
             await gl.request_permission()
 
         is_tracking = True
-
-        # Hide start, show pause/stop
         start_btn.visible = False
         pause_row.visible = True
         page.update()
 
-        # Safely try to get the position to avoid the 10-second timeout crash
         try:
             await gl.get_current_position()
         except Exception as err:
-            print(f"GPS Searching / Timeout: {err}")
-            page.overlay.append(
-                ft.SnackBar(content=ft.Text("Searching for GPS... Step outside for a better signal!"), open=True)
-            )
-            page.update()
+            print(f"GPS Searching: {err}")
 
     def pause_tracking(e):
         nonlocal is_tracking
         is_tracking = False
-
         pause_row.visible = False
         start_btn.visible = True
         start_btn.content = ft.Text("RESUME", weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)
@@ -116,8 +100,6 @@ def main(page: ft.Page):
     def stop_tracking(e):
         nonlocal is_tracking, total_dist
         is_tracking = False
-
-        # Reset the route data and map visuals
         path_points.clear()
         total_dist = 0.0
         distance_value.value = "0.00"
@@ -130,27 +112,16 @@ def main(page: ft.Page):
         start_btn.icon = ft.Icons.FIBER_MANUAL_RECORD
         page.update()
 
-    # --- Dashboard Buttons ---
     start_btn = ft.FloatingActionButton(
         content=ft.Text("START", weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE),
-        icon=ft.Icons.FIBER_MANUAL_RECORD,
-        bgcolor=ft.Colors.DEEP_ORANGE,
-        width=150,
-        on_click=start_tracking
+        icon=ft.Icons.FIBER_MANUAL_RECORD, bgcolor=ft.Colors.DEEP_ORANGE, width=150, on_click=start_tracking
     )
-
     pause_btn = ft.FloatingActionButton(icon=ft.Icons.PAUSE, bgcolor=ft.Colors.GREY_300, on_click=pause_tracking)
     stop_btn = ft.FloatingActionButton(icon=ft.Icons.STOP, bgcolor=ft.Colors.RED_400, on_click=stop_tracking)
 
-    pause_row = ft.Row(
-        controls=[pause_btn, stop_btn],
-        alignment=ft.MainAxisAlignment.CENTER,
-        visible=False,
-        spacing=20
-    )
+    pause_row = ft.Row(controls=[pause_btn, stop_btn], alignment=ft.MainAxisAlignment.CENTER, visible=False, spacing=20)
 
-    # --- The Dashboard Container ---
-    dashboard = ft.Container(
+    map_dashboard = ft.Container(
         content=ft.Column(
             controls=[
                 ft.Column([distance_label, distance_value], horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -158,8 +129,7 @@ def main(page: ft.Page):
                 start_btn,
                 pause_row
             ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=20
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=20
         ),
         bgcolor=ft.Colors.WHITE,
         border_radius=ft.BorderRadius(top_left=30, top_right=30, bottom_left=0, bottom_right=0),
@@ -167,22 +137,115 @@ def main(page: ft.Page):
         shadow=ft.BoxShadow(spread_radius=1, blur_radius=15, color=ft.Colors.BLACK26)
     )
 
-    # --- Main Layout Assembly ---
-    page.add(
-        ft.Stack(
+    map_view_stack = ft.Stack(
+        controls=[
+            map_ctrl,
+            ft.Container(content=map_dashboard, alignment=ft.Alignment.BOTTOM_CENTER, bottom=0, left=0, right=0)
+        ],
+        expand=True
+    )
+
+    # ==========================================
+    # 2. HOME VIEW COMPONENTS (The Dashboard)
+    # ==========================================
+
+    # FIX: We create an async helper function for the Record button
+    async def go_map(e):
+        await page.push_route("/map")
+
+    home_content = ft.Container(
+        padding=20,
+        expand=True,
+        content=ft.Column(
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                map_ctrl,
+                # Profile Header
+                ft.Row(
+                    controls=[
+                        ft.CircleAvatar(foreground_image_src="https://ui-avatars.com/api/?name=User&background=random"),
+                        ft.Text("Good Morning, Runner!", size=20, weight=ft.FontWeight.BOLD)
+                    ],
+                    alignment=ft.MainAxisAlignment.START
+                ),
+                ft.Divider(height=30),
+
+                # Stats Card
                 ft.Container(
-                    content=dashboard,
-                    alignment=ft.Alignment.BOTTOM_CENTER,
-                    bottom=0,
-                    left=0,
-                    right=0
+                    bgcolor=ft.Colors.GREY_100,
+                    padding=20,
+                    border_radius=15,
+                    content=ft.Column([
+                        ft.Text("THIS WEEK", size=12, color=ft.Colors.GREY_700, weight=ft.FontWeight.BOLD),
+                        ft.Text("14.2 km", size=36, weight=ft.FontWeight.BOLD, color=ft.Colors.DEEP_ORANGE),
+                        ft.Text("3 Activities", size=14, color=ft.Colors.GREY_500)
+                    ])
+                ),
+                ft.Divider(height=40, color=ft.Colors.TRANSPARENT),
+
+                # BIG Record Button
+                ft.Button(
+                    content=ft.Row(
+                        [ft.Icon(ft.Icons.ADD_LOCATION_ALT, color=ft.Colors.WHITE),
+                         ft.Text("RECORD ACTIVITY", size=18, weight=ft.FontWeight.BOLD, color=ft.Colors.WHITE)],
+                        alignment=ft.MainAxisAlignment.CENTER
+                    ),
+                    bgcolor=ft.Colors.DEEP_ORANGE,
+                    width=300,
+                    height=60,
+                    style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=30)),
+                    # FIX: Pass the new async function here
+                    on_click=go_map
                 )
-            ],
-            expand=True
+            ]
         )
     )
+
+    # ==========================================
+    # 3. ROUTING LOGIC (Switching Screens)
+    # ==========================================
+    def route_change(e):
+        page.views.clear()
+
+        # Always build the Home View first
+        page.views.append(
+            ft.View(
+                route="/",
+                controls=[
+                    ft.AppBar(title=ft.Text("HealthTracker", weight=ft.FontWeight.BOLD), bgcolor=ft.Colors.WHITE),
+                    home_content
+                ],
+                bgcolor=ft.Colors.WHITE
+            )
+        )
+
+        # If the user clicks Record, layer the Map View on top
+        if page.route == "/map":
+            page.views.append(
+                ft.View(
+                    route="/map",
+                    controls=[
+                        ft.AppBar(title=ft.Text("Recording", color=ft.Colors.WHITE), bgcolor=ft.Colors.DEEP_ORANGE,
+                                  icon_color=ft.Colors.WHITE),
+                        map_view_stack
+                    ],
+                    padding=0
+                )
+            )
+        page.update()
+
+    # FIX: Made view_pop async so it can await push_route when you click the back arrow
+    async def view_pop(e):
+        page.views.pop()
+        top_view = page.views[-1]
+        await page.push_route(top_view.route)
+
+    page.on_route_change = route_change
+    page.on_view_pop = view_pop
+
+    # FIX: Instead of calling the coroutine push_route at the end,
+    # we just manually trigger the UI to build the home screen!
+    page.route = "/"
+    route_change(None)
 
 
 if __name__ == "__main__":
