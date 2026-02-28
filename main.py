@@ -149,7 +149,6 @@ def main(page: ft.Page):
     # 2. HOME VIEW COMPONENTS (The Dashboard)
     # ==========================================
 
-    # FIX: We create an async helper function for the Record button
     async def go_map(e):
         await page.push_route("/map")
 
@@ -193,7 +192,6 @@ def main(page: ft.Page):
                     width=300,
                     height=60,
                     style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=30)),
-                    # FIX: Pass the new async function here
                     on_click=go_map
                 )
             ]
@@ -224,8 +222,9 @@ def main(page: ft.Page):
                 ft.View(
                     route="/map",
                     controls=[
+                        # FIX: Changed icon_color to color for universal icon/text styling in Flet 1.0
                         ft.AppBar(title=ft.Text("Recording", color=ft.Colors.WHITE), bgcolor=ft.Colors.DEEP_ORANGE,
-                                  icon_color=ft.Colors.WHITE),
+                                  color=ft.Colors.WHITE),
                         map_view_stack
                     ],
                     padding=0
@@ -233,7 +232,6 @@ def main(page: ft.Page):
             )
         page.update()
 
-    # FIX: Made view_pop async so it can await push_route when you click the back arrow
     async def view_pop(e):
         page.views.pop()
         top_view = page.views[-1]
@@ -242,8 +240,6 @@ def main(page: ft.Page):
     page.on_route_change = route_change
     page.on_view_pop = view_pop
 
-    # FIX: Instead of calling the coroutine push_route at the end,
-    # we just manually trigger the UI to build the home screen!
     page.route = "/"
     route_change(None)
 
